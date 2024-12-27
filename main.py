@@ -1,15 +1,21 @@
-
-from matching.rank_resumes_by_similarity import rank_resumes_by_semantic_similarity
-
-job_description = "Looking for a software engineer with Python, ML, and NLP experience."
-resumes = [
-    "Experienced Python developer with strong background in machine learning and text analytics.",
-    "Front-end engineer with React and TypeScript skills.",
-    "Recent CS graduate with internship in NLP research."
-]
+from classification.classify_resumes import classify_resumes
 
 if __name__ == "__main__":
-    rankings = rank_resumes_by_semantic_similarity(job_description, resumes)
-    print("Ranked Resumes (index, score):")
-    for index, score in rankings:
-        print(f"{index}: {score:.4f}")
+    resumes = [
+        "Experienced Python developer with machine learning and NLP background.",
+        "Front-end developer skilled in React and TypeScript.",
+        "Data analyst with experience in SQL, Excel, and Tableau.",
+        "AI researcher with focus on deep learning and transformer models."
+    ]
+
+    labels = [
+        "Machine Learning Engineer",
+        "Frontend Developer",
+        "Data Analyst",
+        "AI Researcher"
+    ]
+
+    new_resume = "Skilled in Python, NLP, and deploying ML models."
+
+    prediction = classify_resumes(resumes, labels, new_resume)
+    print(f"Predicted Role: {prediction}")
