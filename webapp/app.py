@@ -4,7 +4,8 @@ import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from nltk.stem import WordNetLemmatizer
-
+from sentence_transformers import SentenceTransformer
+from sklearn.metrics.pairwise import cosine_similarity
 # Download NLTK data
 nltk.download('punkt')
 nltk.download('stopwords')
@@ -59,3 +60,34 @@ if uploaded_files:
                 st.session_state.file_names.append(uploaded_file.name)
                 st.session_state.processed_files.add(uploaded_file.name)
                 st.success(f"Extracted text from: {uploaded_file.name}")
+
+
+
+# Load SBERT model
+sbert_model = SentenceTransformer('all-MiniLM-L6-v2')
+
+# Job description input
+st.markdown("## 🧾 Paste Job Description")
+job_description = st.text_area("Enter the job description here:")
+
+# Similarity calculation
+if st.button("Match Resumes"):
+    if not job_description.strip():
+        st.warning("Please enter a job description.")
+    elif not st.session_state.text_blocks:
+        st.warning("Please upload at least one resume.")
+    else:
+        with st.spinner("Ranking resumes..."):
+
+            
+            resume_embeddings = sbert_model.encode(st.session_state.text_blocks)
+            jd_embedding = sbert_model.encode([job_description])[0]
+
+            similarities = cosine_similarity([jd_embedding], resume_embeddings)[0]
+
+            # Rank and show
+            ranked = sorted(zip(st.session_state.file_names, similarities), key=lambda x: -x[1])
+            st.markdown("## 📊 Resume Match Results")
+            for name, score in ranked:
+                st.write(f"**{name}** — Similarity Score: `{score:.4f}`")
+
