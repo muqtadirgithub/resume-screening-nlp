@@ -79,8 +79,10 @@ if st.button("Match Resumes"):
     else:
         with st.spinner("Ranking resumes..."):
 
-            
-            resume_embeddings = sbert_model.encode(st.session_state.text_blocks)
+           
+            processed_resumes = [preprocess_resume(resume) for resume in st.session_state.text_blocks]
+
+            resume_embeddings = sbert_model.encode(processed_resumes)
             jd_embedding = sbert_model.encode([job_description])[0]
 
             similarities = cosine_similarity([jd_embedding], resume_embeddings)[0]
@@ -90,4 +92,3 @@ if st.button("Match Resumes"):
             st.markdown("## 📊 Resume Match Results")
             for name, score in ranked:
                 st.write(f"**{name}** — Similarity Score: `{score:.4f}`")
-
