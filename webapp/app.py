@@ -92,3 +92,20 @@ if st.button("Match Resumes"):
             st.markdown("## 📊 Resume Match Results")
             for name, score in ranked:
                 st.write(f"**{name}** — Similarity Score: `{score:.4f}`")
+            # Predict categories for each resume
+            predicted_labels = model.predict(resume_embeddings)
+            predicted_categories = label_encoder.inverse_transform(predicted_labels)
+
+            # Create DataFrame of results
+            result_df = pd.DataFrame({
+                "Resume File": st.session_state.file_names,
+                "Similarity Score": similarities,
+                "Predicted Category": predicted_categories
+            })
+
+            # Add ranking
+            result_df["Rank"] = result_df["Similarity Score"].rank(ascending=False, method='first').astype(int)
+            result_df = result_df.sort_values(by="Rank")
+
+            st.markdown("## 🧠 Predicted Categories and Resume Rankings")
+            st.dataframe(result_df[["Resume File", "Similarity Score", "Predicted Category", "Rank"]])
