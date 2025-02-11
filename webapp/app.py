@@ -270,15 +270,16 @@ if st.button("Match Resumes"):
 
             st.markdown("## 🧠 Predicted Categories and Resume Rankings")
             st.dataframe(result_df[["Resume File", "Similarity Score", "Predicted Category", "Rank"]])
-            # Display extracted details per resume (⚠️ flawed logic)
+ 
             st.markdown("## 🧾 Extracted Resume Details")
 
-            for i, processed_text in enumerate(processed_resumes):  
+            for i, resume_text in enumerate(st.session_state.text_blocks): 
                 file_name = st.session_state.file_names[i]
-                extracted_lines = extract_skills_edu_exp(processed_text)  
+                extracted_lines = extract_skills_edu_exp(resume_text)
                 st.markdown(f"### 📄 {file_name}")
                 if extracted_lines:
                     for line in extracted_lines:
                         st.write(f"- {line}")
                 else:
                     st.warning("No relevant details extracted.")
+
