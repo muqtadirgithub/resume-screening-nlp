@@ -1,29 +1,22 @@
-# Resume Screening NLP
+# 📝 Resume Screening NLP
 
-This project automates the classification and ranking of resumes using machine learning and NLP techniques.
+A Streamlit-based application that uses NLP and machine learning to classify and rank resumes based on a job description.
 
-## Overview
+## 🚀 Features
 
-We aim to streamline the resume screening process by:
-- Classifying resumes into predefined job categories
-- Matching resumes against a specific job description
-- Ranking resumes based on semantic similarity
+- Upload and parse multiple resume PDFs
+- Extract skills, education, and experience
+- Match resumes semantically to job description using SBERT
+- Predict job role category using a trained classification model
+- Interactive UI with real-time results and rankings
 
-## Modules
+## 📦 Requirements
 
-- **classification/**: Train and use machine learning models to classify resumes.
-- **matching/**: Compare resumes to job descriptions and rank based on relevance.
-- **webapp/**: A Flask frontend to interact with the system.
-- **tests/**: Unit and integration tests for all modules.
+- Python 3.8+
+- `streamlit`, `sklearn`, `nltk`, `PyPDF2`, `sentence-transformers`, `pandas`
 
-## Getting Started
+## 💻 Usage
 
-1. Install dependencies:
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-2. Run the web app:
-    ```bash
-    python webapp/app.py
-    ```
+```bash
+pip install -r requirements.txt
+streamlit run webapp/app.py

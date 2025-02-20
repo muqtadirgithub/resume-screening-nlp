@@ -22,6 +22,14 @@ label_encoder = joblib.load("resume_label_encoder.pkl")
 # Streamlit page config
 st.set_page_config(page_title="Resume Screening App", layout="centered")
 st.title("📝 Resume Screening NLP")
+st.sidebar.title("ℹ️ About This App")
+st.sidebar.markdown("""
+This app lets you upload multiple resumes and match them against a job description using AI.
+
+- Uses **SBERT** for semantic similarity
+- Uses a trained classifier for job role prediction
+- Extracts skills, education, and experience
+""")
 st.markdown("Upload resumes and classify them based on job categories using NLP and ML.")
 from PyPDF2 import PdfReader
 
