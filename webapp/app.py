@@ -4,8 +4,11 @@ import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from nltk.stem import WordNetLemmatizer
-from sentence_transformers import SentenceTransformer
+from extraction.feature_vector_extraction import extract_embeddings_from_resumes
+
 from sklearn.metrics.pairwise import cosine_similarity
+
+
 # Download NLTK data
 nltk.download('punkt')
 nltk.download('stopwords')
@@ -71,8 +74,7 @@ if uploaded_files:
 
 
 
-# Load SBERT model
-sbert_model = SentenceTransformer('all-MiniLM-L6-v2')
+
 
 # Job description input
 st.markdown("## 🧾 Paste Job Description")
@@ -90,8 +92,12 @@ if st.button("Match Resumes"):
            
             processed_resumes = [preprocess_resume(resume) for resume in st.session_state.text_blocks]
 
-            resume_embeddings = sbert_model.encode(processed_resumes)
-            jd_embedding = sbert_model.encode([job_description])[0]
+            resume_embeddings_df = extract_embeddings_from_resumes(processed_resumes)
+            jd_embedding_df = extract_embeddings_from_resumes([job_description])
+
+            resume_embeddings = resume_embeddings_df.values
+            jd_embedding = jd_embedding_df.values[0].reshape(1, -1)
+
 
             similarities = cosine_similarity([jd_embedding], resume_embeddings)[0]
 
