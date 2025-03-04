@@ -232,19 +232,34 @@ uploaded_files = st.file_uploader("Upload Multiple Resume Files", type="pdf", ac
 
 if uploaded_files:
     st.markdown("### ✅ Extracted Resume Text")
+
+    any_valid = False  # Flag to track if at least one resume is readable
+
     for uploaded_file in uploaded_files:
         if uploaded_file.name not in st.session_state.processed_files:
             reader = PdfReader(uploaded_file)
             text = ""
+
             for page in reader.pages:
-                page_text = page.extract_text()
-                if page_text:
-                    text += page_text + "\n"
-            if text.strip():
-                st.session_state.text_blocks.append(text.strip())
+                try:
+                    page_text = page.extract_text()
+                    if page_text:
+                        text += page_text + "\n"
+                except Exception as e:
+                    st.warning(f"⚠️ Error reading {uploaded_file.name}: {e}")
+
+            cleaned_text = text.strip()
+            if cleaned_text:
+                any_valid = True
+                st.session_state.text_blocks.append(cleaned_text)
                 st.session_state.file_names.append(uploaded_file.name)
                 st.session_state.processed_files.add(uploaded_file.name)
-                st.success(f"Extracted text from: {uploaded_file.name}")
+                st.success(f"✅ Extracted text from: {uploaded_file.name}")
+            else:
+                st.warning(f"⚠️ No extractable text found in: {uploaded_file.name}")
+
+    if not any_valid:
+        st.error("❌ No valid resume content found. Please check your files.")
 
 # ---------- Job Description Input & Matching ----------
 
