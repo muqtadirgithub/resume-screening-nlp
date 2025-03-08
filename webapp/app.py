@@ -299,7 +299,26 @@ if st.button("Match Resumes"):
 
             st.markdown("## 🧠 Predicted Categories and Resume Rankings")
             st.dataframe(result_df[["Resume File", "Similarity Score", "Predicted Category", "Rank"]])
- 
+            # 🧠 Highlight top predicted category
+            most_common = result_df["Predicted Category"].value_counts().idxmax()
+            st.success(f"🔍 Most Common Predicted Role: **{most_common}**")
+
+            # 📥 Download CSV of results
+            st.markdown("### ⬇️ Download Results")
+            csv = result_df.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="Download CSV",
+                data=csv,
+                file_name='resume_screening_results.csv',
+                mime='text/csv'
+            )
+
+            # 📊 Summary block
+            st.markdown("### 📌 Summary by Role")
+            category_counts = result_df["Predicted Category"].value_counts()
+            for category, count in category_counts.items():
+                st.write(f"- **{category}**: {count} resume(s)")
+
             st.markdown("## 🧾 Extracted Resume Details")
 
             for i, resume_text in enumerate(st.session_state.text_blocks): 
