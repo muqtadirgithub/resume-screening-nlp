@@ -8,6 +8,7 @@ from extraction.feature_vector_extraction import extract_embeddings_from_resumes
 
 from sklearn.metrics.pairwise import cosine_similarity
 
+from anonymization.anonymization import remove_identifiers
 
 # Download NLTK data
 nltk.download('punkt')
@@ -57,6 +58,9 @@ uploaded_files = st.file_uploader(
 # Extract text from resumes
 if uploaded_files:
     st.markdown("### ✅ Extracted Resume Text")
+    if st.session_state.text_blocks:
+        st.markdown("### 🕵️ Anonymized Sample Resume (First File)")
+        st.code(remove_identifiers(st.session_state.text_blocks[0][:800]))
     for uploaded_file in uploaded_files:
         if uploaded_file.name not in st.session_state.processed_files:
             reader = PdfReader(uploaded_file)
@@ -274,7 +278,10 @@ if st.button("Match Resumes"):
     else:
         with st.spinner("Ranking resumes..."):
 
-            processed_resumes = [preprocess_resume(r) for r in st.session_state.text_blocks]
+            # Apply anonymization before preprocessing
+            anonymized_resumes = [remove_identifiers(r) for r in st.session_state.text_blocks]
+            processed_resumes = [preprocess_resume(r) for r in anonymized_resumes]
+
             resume_embeddings = sbert_model.encode(processed_resumes)
             jd_embedding = sbert_model.encode([job_description])[0]
 
