@@ -95,3 +95,21 @@ def predict_resume_category(resume_texts):
     predicted_categories = tokenizer.inverse_transform(predicted_labels)
 
     return predicted_categories
+
+def predict_resume_category(resume_text):
+    """
+    Loads the trained model and label encoder and predicts the category of a single resume.
+    """
+    model = joblib.load("webapp/resume_classification_model.pkl")
+    with open("webapp/resume_label_encoder.pkl", "rb") as f:
+        label_encoder = pickle.load(f)
+
+    embedded = extract_embeddings_from_resumes([resume_text])
+    pred = model.predict(embedded)
+    return label_encoder.inverse_transform(pred)[0]
+
+# Example usage
+if __name__ == "__main__":
+    sample_resume = "Experienced software engineer skilled in Python, machine learning, and cloud computing."
+    category = predict_resume_category(sample_resume)
+    print("Predicted Resume Category:", category)
