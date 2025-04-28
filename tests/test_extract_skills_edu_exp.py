@@ -1,17 +1,36 @@
 import unittest
-from webapp.app import extract_skills_edu_exp
+import pandas as pd
+from extraction.extract_skills_edu_exp import extract_skills_edu_exp 
 
-class TestSkillEduExpExtraction(unittest.TestCase):
+class TestResumeParser(unittest.TestCase):
 
-    def test_extraction_detects_skills_edu_exp(self):
-        resume_text = """
-        Jane Doe has a Master's degree in Computer Science.
-        She worked as a data scientist and is skilled in Python, TensorFlow, and SQL.
-        Also experienced in cloud platforms like AWS.
+    def setUp(self):
+        self.sample_resume = """
+        John Doe
+        Software Engineer with 5 years of experience in Python, Django, and REST APIs.
+        Skilled in cloud platforms like AWS and Azure.
+        Worked at ABC Corporation as a Backend Developer.
+        Education: Bachelor of Technology in Computer Science from XYZ University.
+        Certified in AWS Cloud Practitioner.
         """
 
-        extracted = extract_skills_edu_exp(resume_text)
+    def test_extract_skill_edu_exp_fields(self):
+        result = extract_skills_edu_exp(self.sample_resume)
 
-        self.assertTrue(any("computer science" in line.lower() for line in extracted), "Education not detected")
-        self.assertTrue(any("python" in line.lower() for line in extracted), "Skill not detected")
-        self.assertTrue(any("worked" in line.lower() for line in extracted), "Experience not detected")
+        self.assertIsInstance(result, pd.Series)
+        self.assertIn("Skills", result)
+        self.assertIn("Education", result)
+        self.assertIn("Experience", result)
+
+        # Assert that the result contains expected keywords
+        self.assertIn("AWS", result["Skills"])
+        self.assertIn("Bachelor of Technology", result["Education"])
+        self.assertIn("Worked at ABC Corporation", result["Experience"])
+
+    def test_extract_skill_edu_exp_empty_text(self):
+        empty_resume = ""
+        result = extract_skills_edu_exp(empty_resume)
+
+        self.assertEqual(result["Skills"], "")
+        self.assertEqual(result["Education"], "")
+        self.assertEqual(result["Experience"], "")

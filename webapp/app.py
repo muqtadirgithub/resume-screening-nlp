@@ -1,41 +1,141 @@
 import streamlit as st
 import joblib
+import pandas as pd
+from PyPDF2 import PdfReader
+from sentence_transformers import SentenceTransformer
+from sklearn.metrics.pairwise import cosine_similarity
+import re
 import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from nltk.stem import WordNetLemmatizer
-from extraction.feature_vector_extraction import extract_embeddings_from_resumes
-
-from sklearn.metrics.pairwise import cosine_similarity
-
-from anonymization.anonymization import remove_identifiers
-
-# Download NLTK data
 nltk.download('punkt')
 nltk.download('stopwords')
 nltk.download('wordnet')
+nltk.download('punkt_tab')
 
-# Initialize NLP tools
+# Initialize lemmatizer and stopwords
 lemmatizer = WordNetLemmatizer()
 stop_words = set(stopwords.words('english'))
-
-# Load trained model and label encoder
+# Load models
 model = joblib.load("resume_classification_model.pkl")
-label_encoder = joblib.load("resume_label_encoder.pkl")
+tokenizer = joblib.load("resume_label_encoder.pkl")
+sbert_model = SentenceTransformer('all-MiniLM-L6-v2')
 
-# Streamlit page config
-st.set_page_config(page_title="Resume Screening App", layout="centered")
-st.title("📝 Resume Screening NLP")
-st.sidebar.title("ℹ️ About This App")
-st.sidebar.markdown("""
-This app lets you upload multiple resumes and match them against a job description using AI.
+def preprocess_resume(resume_text):
+    """
+    Preprocess resume text through the following steps:
+    1. Load resume data from CSV files.
+    2. Clean and standardize text:
+       - Convert to lowercase
+       - Remove numbers and punctuation
+       - Tokenize text
+       - Remove stop words
+       - Apply lemmatization
+    """
 
-- Uses **SBERT** for semantic similarity
-- Uses a trained classifier for job role prediction
-- Extracts skills, education, and experience
-""")
-st.markdown("Upload resumes and classify them based on job categories using NLP and ML.")
-from PyPDF2 import PdfReader
+    # Step 3: Convert text to lowercase
+    text = resume_text.lower()
+
+    # Step 4: Remove punctuation and numbers
+    text = re.sub(r'[^\w\s]|[\d]', '', text)
+
+    # Step 5: Tokenize text into words
+    tokens = word_tokenize(text)
+
+    # Step 6 & 7: Remove stop words and apply lemmatization
+    cleaned_tokens = [lemmatizer.lemmatize(word) for word in tokens if word not in stop_words]
+
+    # Join tokens back into a single string
+    return ' '.join(cleaned_tokens)
+    
+# Function to extract skill, education, and work experience-related lines from resume text
+def extract_skills_edu_exp(resume_text):
+    """Function to extract skill, education, and work experience-related lines from resume text"""
+    # Define a set of skill-related keywords
+    skills_keywords = {
+        "skills", "skill", "technical skills", "soft skills", "tools", "technologies", "technology",
+        "frameworks", "libraries", "platforms", "languages", "certifications", "methodologies",
+        "programming", "databases", "cloud", "devops", "analytics", "testing tools", "networking"
+    }
+
+    # Define a comprehensive set of education-related keywords
+    education_keywords = {
+        # General education terms
+        "bachelor", "bachelors", "master", "masters", "phd", "degree", "degrees", "university", "college",
+        "graduate", "postgraduate", "undergraduate", "school", "education", "certification", "certifications", "diploma",
+
+        # Common degree/program abbreviations
+        "b.tech", "be", "bsc", "bca", "bba", "ba", "mba", "mca", "m.tech", "me", "msc", "ms", "pgdm", "pg", "ug", "llb", 
+        "llm",
+
+        # Data/Tech-specific
+        "data science", "machine learning", "artificial intelligence", "computer science", "cs",
+        "information technology", "it", "software engineering", "cybersecurity", "network security",
+        "devops", "cloud computing", "aws", "azure", "gcp", "database", "big data", "hadoop", "etl",
+        "python", "java", "dotnet", ".net", "blockchain", "web development", "web designing", "ui ux",
+        "software testing", "automation testing", "qa", "full stack", "frontend", "backend",
+
+        # Business/Management
+        "business administration", "business analytics", "operations management", "operations",
+        "human resources", "hr", "marketing", "finance", "accounting", "commerce", "economics",
+        "entrepreneurship", "strategy", "organizational behavior", "project management", "pmp",
+
+        # Engineering branches
+        "mechanical engineering", "civil engineering", "electrical engineering", "electronics",
+        "electronics and communication", "ece", "instrumentation", "engineering",
+
+        # Legal/Advocate
+        "law", "legal studies", "advocate", "llb", "llm", "jurisprudence", "judicial", "legal",
+
+        # Arts & Health
+        "liberal arts", "fine arts", "performing arts", "visual arts", "design", "health sciences",
+        "healthcare", "nursing", "medicine", "fitness", "physical education", "nutrition",
+
+        # Additional soft skill / professional-related
+        "communication", "leadership", "pmo", "analyst", "consultant", "trainer", "coach"
+    }
+
+    # Define work-related keywords
+    work_keywords = {
+        "experience", "exprience", "worked", "employed", "company", "organization", "intern", "internship"
+    }
+
+    # Compile regex patterns for matching categories
+    skills_pattern = re.compile(r'\b(' + '|'.join(skills_keywords) + r')\b', re.IGNORECASE)
+    edu_pattern = re.compile(r'\b(' + '|'.join(education_keywords) + r')\b', re.IGNORECASE)
+    work_pattern = re.compile(r'\b(' + '|'.join(work_keywords) + r')\b', re.IGNORECASE)
+
+    # Lists to store matched lines
+    skills = []
+    education = []
+    experience = []
+
+    # Split text into lines to process individually
+    lines = resume_text.split('\n')
+
+    for line in lines:
+        sentence = line.strip()
+        lower = sentence.lower()
+
+        # Match and collect skill-related lines
+        if skills_pattern.search(lower):
+            skills.append(sentence)
+
+        # Match and collect education-related lines
+        if edu_pattern.search(lower):
+            education.append(sentence)
+
+        # Match and collect work experience-related lines
+        if work_pattern.search(lower):
+            experience.append(sentence)
+
+    # Return results as a Pandas Series (suitable for applying to DataFrames)
+    return skills + education +  experience
+
+# Page config
+st.set_page_config(page_title="Multi Resume Analyzer", layout="centered")
+st.markdown("<h1 style='text-align: center; color: #4CAF50;'>📝 Resume Matching And Candidate Ranking</h1>", unsafe_allow_html=True)
 
 # Initialize session state
 if "text_blocks" not in st.session_state:
@@ -47,20 +147,57 @@ if "file_names" not in st.session_state:
 if "processed_files" not in st.session_state:
     st.session_state.processed_files = set()
 
-# Upload resumes
-st.markdown("## 📄 Upload Resumes (PDF)")
+if "submitted" not in st.session_state:
+    st.session_state.submitted = False
+
+if "reset_uploader" not in st.session_state:
+    st.session_state.reset_uploader = 0  # used to reset file uploaders
+
+# Reset Button
+col1, col2, col3 = st.columns(3)
+with col3:
+    if st.button("🔁 Reset Application"):
+        st.session_state.text_blocks = []
+        st.session_state.file_names = []
+        st.session_state.processed_files = set()
+        st.session_state.submitted = False
+        st.session_state.reset_uploader += 1  # triggers re-render of uploaders
+        st.rerun()
+
+# Dynamic keys for resetting
+jd_uploader_key = f"jd_uploader_{st.session_state.reset_uploader}"
+resume_uploader_key = f"resume_uploader_{st.session_state.reset_uploader}"
+
+# Job Description upload
+jd_file = st.file_uploader("Upload Job Description (PDF)", type="pdf", key=jd_uploader_key)
+jd = ""
+if jd_file is not None:
+    try:
+        reader = PdfReader(jd_file)
+        jd_text = ""
+        for page in reader.pages:
+            page_text = page.extract_text()
+            if page_text:
+                jd_text += page_text + "\n"
+        jd = jd_text.strip()
+        if jd:
+            st.success("✅ Job Description extracted successfully.")
+        else:
+            st.warning("⚠️ No extractable text found in the PDF.")
+    except Exception as e:
+        st.error(f"❌ Error reading PDF: {e}")
+
+# Resume upload
 uploaded_files = st.file_uploader(
-    "Upload Multiple Resume Files",
+    "Upload Multiple Resumes (PDF format)",
     type="pdf",
-    accept_multiple_files=True
+    accept_multiple_files=True,
+    key=resume_uploader_key
 )
 
-# Extract text from resumes
-if uploaded_files:
-    st.markdown("### ✅ Extracted Resume Text")
-    if st.session_state.text_blocks:
-        st.markdown("### 🕵️ Anonymized Sample Resume (First File)")
-        st.code(remove_identifiers(st.session_state.text_blocks[0][:800]))
+# Extract resume text
+if uploaded_files and not st.session_state.submitted:
+    st.markdown("### 📄 Extracted Resumes from PDF:")
     for uploaded_file in uploaded_files:
         if uploaded_file.name not in st.session_state.processed_files:
             reader = PdfReader(uploaded_file)
@@ -69,272 +206,64 @@ if uploaded_files:
                 page_text = page.extract_text()
                 if page_text:
                     text += page_text + "\n"
-
             if text.strip():
                 st.session_state.text_blocks.append(text.strip())
                 st.session_state.file_names.append(uploaded_file.name)
                 st.session_state.processed_files.add(uploaded_file.name)
-                st.success(f"Extracted text from: {uploaded_file.name}")
-
-
-
-
-
-# Job description input
-st.markdown("## 🧾 Paste Job Description")
-job_description = st.text_area("Enter the job description here:")
-
-# Similarity calculation
-if st.button("Match Resumes"):
-    if not job_description.strip():
-        st.warning("Please enter a job description.")
-    elif not st.session_state.text_blocks:
-        st.warning("Please upload at least one resume.")
-    else:
-        with st.spinner("Ranking resumes..."):
-
-           
-            processed_resumes = [preprocess_resume(resume) for resume in st.session_state.text_blocks]
-
-            resume_embeddings_df = extract_embeddings_from_resumes(processed_resumes)
-            jd_embedding_df = extract_embeddings_from_resumes([job_description])
-
-            resume_embeddings = resume_embeddings_df.values
-            jd_embedding = jd_embedding_df.values[0].reshape(1, -1)
-
-
-            similarities = cosine_similarity([jd_embedding], resume_embeddings)[0]
-
-            # Rank and show
-            ranked = sorted(zip(st.session_state.file_names, similarities), key=lambda x: -x[1])
-            st.markdown("## 📊 Resume Match Results")
-            for name, score in ranked:
-                st.write(f"**{name}** — Similarity Score: `{score:.4f}`")
-            # Predict categories for each resume
-            predicted_labels = model.predict(resume_embeddings)
-            predicted_categories = label_encoder.inverse_transform(predicted_labels)
-
-            # Create DataFrame of results
-            result_df = pd.DataFrame({
-                "Resume File": st.session_state.file_names,
-                "Similarity Score": similarities,
-                "Predicted Category": predicted_categories
-            })
-
-            # Add ranking
-            result_df["Rank"] = result_df["Similarity Score"].rank(ascending=False, method='first').astype(int)
-            result_df = result_df.sort_values(by="Rank")
-
-            st.markdown("## 🧠 Predicted Categories and Resume Rankings")
-            st.dataframe(result_df[["Resume File", "Similarity Score", "Predicted Category", "Rank"]])
-import streamlit as st
-import joblib
-import nltk
-import pandas as pd
-from nltk.corpus import stopwords
-from nltk.tokenize import word_tokenize
-from nltk.stem import WordNetLemmatizer
-from sentence_transformers import SentenceTransformer
-from sklearn.metrics.pairwise import cosine_similarity
-from PyPDF2 import PdfReader
-import re
-
-# Download NLTK data
-nltk.download('punkt')
-nltk.download('stopwords')
-nltk.download('wordnet')
-
-# Initialize NLP tools
-lemmatizer = WordNetLemmatizer()
-stop_words = set(stopwords.words('english'))
-
-# Load trained model and label encoder
-model = joblib.load("resume_classification_model.pkl")
-label_encoder = joblib.load("resume_label_encoder.pkl")
-
-# Load SBERT model
-sbert_model = SentenceTransformer('all-MiniLM-L6-v2')
-
-# ---------- Preprocessing Functions ----------
-
-def preprocess_resume(resume_text):
-    """
-    Basic NLP cleaning: lowercase, remove punctuation, tokenize, remove stopwords, lemmatize.
-    """
-    text = resume_text.lower()
-    text = re.sub(r'[^\w\s]|[\d]', '', text)
-    tokens = word_tokenize(text)
-    cleaned_tokens = [lemmatizer.lemmatize(word) for word in tokens if word not in stop_words]
-    return ' '.join(cleaned_tokens)
-
-def extract_skills_edu_exp(resume_text):
-    """Extract skill, education, and experience-related lines from resume text"""
-    skills_keywords = {
-        "skills", "skill", "technical skills", "soft skills", "tools", "technologies", "technology",
-        "frameworks", "libraries", "platforms", "languages", "certifications", "methodologies",
-        "programming", "databases", "cloud", "devops", "analytics", "testing tools", "networking"
-    }
-    education_keywords = {
-        "bachelor", "bachelors", "master", "masters", "phd", "degree", "degrees", "university", "college",
-        "graduate", "postgraduate", "undergraduate", "school", "education", "certification", "certifications", "diploma",
-        "b.tech", "be", "bsc", "bca", "bba", "ba", "mba", "mca", "m.tech", "me", "msc", "ms", "pgdm", "pg", "ug", "llb", "llm",
-        "data science", "machine learning", "artificial intelligence", "computer science", "cs",
-        "information technology", "it", "software engineering", "cybersecurity", "network security",
-        "devops", "cloud computing", "aws", "azure", "gcp", "database", "big data", "hadoop", "etl",
-        "python", "java", "dotnet", ".net", "blockchain", "web development", "web designing", "ui ux",
-        "software testing", "automation testing", "qa", "full stack", "frontend", "backend",
-        "business administration", "business analytics", "operations management", "operations",
-        "human resources", "hr", "marketing", "finance", "accounting", "commerce", "economics",
-        "entrepreneurship", "strategy", "organizational behavior", "project management", "pmp",
-        "mechanical engineering", "civil engineering", "electrical engineering", "electronics",
-        "electronics and communication", "ece", "instrumentation", "engineering",
-        "law", "legal studies", "advocate", "llb", "llm", "jurisprudence", "judicial", "legal",
-        "liberal arts", "fine arts", "performing arts", "visual arts", "design", "health sciences",
-        "healthcare", "nursing", "medicine", "fitness", "physical education", "nutrition",
-        "communication", "leadership", "pmo", "analyst", "consultant", "trainer", "coach"
-    }
-    work_keywords = {
-        "experience", "exprience", "worked", "employed", "company", "organization", "intern", "internship"
-    }
-
-    skills_pattern = re.compile(r'\b(' + '|'.join(skills_keywords) + r')\b', re.IGNORECASE)
-    edu_pattern = re.compile(r'\b(' + '|'.join(education_keywords) + r')\b', re.IGNORECASE)
-    work_pattern = re.compile(r'\b(' + '|'.join(work_keywords) + r')\b', re.IGNORECASE)
-
-    skills, education, experience = [], [], []
-    lines = resume_text.split('\n')
-
-    for line in lines:
-        sentence = line.strip()
-        lower = sentence.lower()
-        if skills_pattern.search(lower):
-            skills.append(sentence)
-        if edu_pattern.search(lower):
-            education.append(sentence)
-        if work_pattern.search(lower):
-            experience.append(sentence)
-
-    return skills + education + experience
-
-# ---------- Streamlit UI Setup ----------
-
-st.set_page_config(page_title="Resume Screening App", layout="centered")
-st.title("📝 Resume Screening NLP")
-st.markdown("Upload resumes and classify them based on job categories using NLP and ML.")
-
-# ---------- File Upload and Text Extraction ----------
-
-if "text_blocks" not in st.session_state:
-    st.session_state.text_blocks = []
-if "file_names" not in st.session_state:
-    st.session_state.file_names = []
-if "processed_files" not in st.session_state:
-    st.session_state.processed_files = set()
-
-st.markdown("## 📄 Upload Resumes (PDF)")
-uploaded_files = st.file_uploader("Upload Multiple Resume Files", type="pdf", accept_multiple_files=True)
-
-if uploaded_files:
-    st.markdown("### ✅ Extracted Resume Text")
-
-    any_valid = False  # Flag to track if at least one resume is readable
-
-    for uploaded_file in uploaded_files:
-        if uploaded_file.name not in st.session_state.processed_files:
-            reader = PdfReader(uploaded_file)
-            text = ""
-
-            for page in reader.pages:
-                try:
-                    page_text = page.extract_text()
-                    if page_text:
-                        text += page_text + "\n"
-                except Exception as e:
-                    st.warning(f"⚠️ Error reading {uploaded_file.name}: {e}")
-
-            cleaned_text = text.strip()
-            if cleaned_text:
-                any_valid = True
-                st.session_state.text_blocks.append(cleaned_text)
-                st.session_state.file_names.append(uploaded_file.name)
-                st.session_state.processed_files.add(uploaded_file.name)
                 st.success(f"✅ Extracted text from: {uploaded_file.name}")
-            else:
-                st.warning(f"⚠️ No extractable text found in: {uploaded_file.name}")
 
-    if not any_valid:
-        st.error("❌ No valid resume content found. Please check your files.")
+# Submit button
+if not st.session_state.submitted:
+    if st.button("Submit"):
+        if len(st.session_state.text_blocks) == 0:
+            st.warning("Please upload at least one valid PDF with text.")
+        elif not jd.strip():
+            st.warning("Please enter a job description.")
+        else:
+            st.session_state.submitted = True
+            st.rerun()
 
-# ---------- Job Description Input & Matching ----------
+# Results
+if st.session_state.submitted and jd:
+    st.markdown("## ✅ Submission Complete!")
 
-st.markdown("## 🧾 Paste Job Description")
-job_description = st.text_area("Enter the job description here:")
+    resumes = st.session_state.text_blocks
+    file_names = st.session_state.file_names
+    processed_resumes = []
+    for resume in resumes:
+        processed_temp_resume = preprocess_resume(resume)
+        processed_resumes.append(extract_skills_edu_exp(processed_temp_resume))
+        
+    # SBERT embeddings
+    embeddings = sbert_model.encode(processed_resumes)
+    jd_embedding = sbert_model.encode([jd])
 
-if st.button("Match Resumes"):
-    if not job_description.strip():
-        st.warning("Please enter a job description.")
-    elif not st.session_state.text_blocks:
-        st.warning("Please upload at least one resume.")
-    else:
-        with st.spinner("Ranking resumes..."):
+    # Similarity calculation
+    similarities = cosine_similarity(jd_embedding, embeddings)[0]
 
-            # Apply anonymization before preprocessing
-            anonymized_resumes = [remove_identifiers(r) for r in st.session_state.text_blocks]
-            processed_resumes = [preprocess_resume(r) for r in anonymized_resumes]
+    # Predict categories
+    predicted_labels = model.predict(embeddings)
+    predicted_categories = tokenizer.inverse_transform(predicted_labels)
 
-            resume_embeddings = sbert_model.encode(processed_resumes)
-            jd_embedding = sbert_model.encode([job_description])[0]
+    # Create DataFrame
+    df = pd.DataFrame({
+        "Resume File": file_names,
+        "Index": list(range(len(resumes))),
+        "Score": similarities,
+        "Predicted Category": predicted_categories
+    })
 
-            similarities = cosine_similarity([jd_embedding], resume_embeddings)[0]
+    # Ranking
+    df["Rank"] = df["Score"].rank(ascending=False, method='first').astype(int)
+    df = df.sort_values(by="Rank")
 
-            ranked = sorted(zip(st.session_state.file_names, similarities), key=lambda x: -x[1])
-            st.markdown("## 📊 Resume Match Results")
-            for name, score in ranked:
-                st.write(f"**{name}** — Similarity Score: `{score:.4f}`")
+    # Best match category
+    top_resume_embedding = embeddings[df.iloc[0]["Index"]].reshape(1, -1)
+    top_pred = model.predict(top_resume_embedding)
+    top_category = tokenizer.inverse_transform(top_pred)[0]
+    st.success(f"🎯 Predicted Job Category for Best Match: **{top_category}**")
 
-            predicted_labels = model.predict(resume_embeddings)
-            predicted_categories = label_encoder.inverse_transform(predicted_labels)
-
-            result_df = pd.DataFrame({
-                "Resume File": st.session_state.file_names,
-                "Similarity Score": similarities,
-                "Predicted Category": predicted_categories
-            })
-
-            result_df["Rank"] = result_df["Similarity Score"].rank(ascending=False, method='first').astype(int)
-            result_df = result_df.sort_values(by="Rank")
-
-            st.markdown("## 🧠 Predicted Categories and Resume Rankings")
-            st.dataframe(result_df[["Resume File", "Similarity Score", "Predicted Category", "Rank"]])
-            # 🧠 Highlight top predicted category
-            most_common = result_df["Predicted Category"].value_counts().idxmax()
-            st.success(f"🔍 Most Common Predicted Role: **{most_common}**")
-
-            # 📥 Download CSV of results
-            st.markdown("### ⬇️ Download Results")
-            csv = result_df.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                label="Download CSV",
-                data=csv,
-                file_name='resume_screening_results.csv',
-                mime='text/csv'
-            )
-
-            # 📊 Summary block
-            st.markdown("### 📌 Summary by Role")
-            category_counts = result_df["Predicted Category"].value_counts()
-            for category, count in category_counts.items():
-                st.write(f"- **{category}**: {count} resume(s)")
-
-            st.markdown("## 🧾 Extracted Resume Details")
-
-            for i, resume_text in enumerate(st.session_state.text_blocks): 
-                file_name = st.session_state.file_names[i]
-                extracted_lines = extract_skills_edu_exp(resume_text)
-                st.markdown(f"### 📄 {file_name}")
-                if extracted_lines:
-                    for line in extracted_lines:
-                        st.write(f"- {line}")
-                else:
-                    st.warning("No relevant details extracted.")
+    # Show results
+    st.markdown("### 📊 Resume Analysis Results:")
+    st.dataframe(df[['Resume File', 'Score', 'Rank', 'Predicted Category']], width=700)
 
